@@ -29,7 +29,7 @@ env:
 jobs:
   finalize-tc-branch:
     name: Finalize TC (${{ matrix.tc-repo }})
-    if: github.event.pull_request.user.login != 'cubrid-submodule-bot[bot]'   # skip automated submodule-bump PRs
+    if: github.event.pull_request.user.login != 'Srltas'   # TEST: skip PRs opened by the test PAT owner
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
