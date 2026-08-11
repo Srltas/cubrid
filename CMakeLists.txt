@@ -823,6 +823,7 @@ if(WITH_CCI AND WITH_CMSERVER AND EXISTS ${CMAKE_SOURCE_DIR}/cubridmanager/serve
     externalproject_add(cubridmanager
       LOG_CONFIGURE        TRUE
       LOG_BUILD            TRUE
+      LOG_OUTPUT_ON_FAILURE TRUE
       DEPENDS pre_cubridmanager ${CMS_DEPENDS}
       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cubridmanager/server
       CONFIGURE_COMMAND sh <SOURCE_DIR>/autogen.sh
@@ -836,6 +837,7 @@ if(WITH_CCI AND WITH_CMSERVER AND EXISTS ${CMAKE_SOURCE_DIR}/cubridmanager/serve
       DEPENDS pre_cubridmanager ${CMS_DEPENDS}
       LOG_CONFIGURE        TRUE
       LOG_BUILD            TRUE
+      LOG_OUTPUT_ON_FAILURE TRUE
       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cubridmanager/server
       CONFIGURE_COMMAND ""
       BUILD_COMMAND cmd /c build.bat --prefix <INSTALL_DIR> --with-cubrid-libdir <TMP_DIR> --with-cubrid-includedir <TMP_DIR> ${CMS_CONFIGURE_OPTS}
