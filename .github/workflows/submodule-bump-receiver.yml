@@ -220,13 +220,7 @@ jobs:
           branch: bump/${{ matrix.sub }}
           base: ${{ env.BASE_BRANCH }}
           title: ${{ steps.pin.outputs.title }}
-          commit-message: |
-            ${{ steps.pin.outputs.title }}
-
-            ${{ steps.pin.outputs.old_short }} -> ${{ steps.pin.outputs.new_short }} (${{ steps.pin.outputs.count }} commit(s))
-            ${{ steps.pin.outputs.compare }}
-
-            ${{ steps.pin.outputs.manifest }}
+          commit-message: ${{ steps.pin.outputs.title }}
           body: |
             Automated submodule bump for `${{ matrix.sub }}`.
 
