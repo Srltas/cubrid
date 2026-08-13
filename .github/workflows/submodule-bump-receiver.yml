@@ -39,17 +39,10 @@ jobs:
     outputs:
       targets: ${{ steps.select.outputs.targets }}
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.SUBMODULE_BOT_APP_ID }}
-          private-key: ${{ secrets.SUBMODULE_BOT_APP_PRIVATE_KEY }}
-
       - name: Select submodules to process
         id: select
         env:
-          GH_TOKEN:      ${{ steps.app-token.outputs.token }}
+          GH_TOKEN:      ${{ secrets.TEST_PAT }}
           EVENT:         ${{ github.event_name }}
           DISPATCH_PATH: ${{ github.event.client_payload.submodule_path }}
           INPUT_PATH:    ${{ inputs.submodule_path }}
@@ -100,24 +93,17 @@ jobs:
       SUB:  ${{ matrix.sub }}
       MODE: ${{ github.event_name == 'workflow_dispatch' && 'at' || 'next' }}
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.SUBMODULE_BOT_APP_ID }}
-          private-key: ${{ secrets.SUBMODULE_BOT_APP_PRIVATE_KEY }}
-
       - name: Checkout parent
         uses: actions/checkout@v4
         with:
           ref: ${{ env.BASE_BRANCH }}
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.TEST_PAT }}
 
       - name: Check queue
         id: queue
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.TEST_PAT }}
         run: |
           set -euo pipefail
           OPEN=$(gh pr list --repo "$PARENT" --state open --limit 100 --json number,headRefName \
@@ -138,7 +124,7 @@ jobs:
         id: pin
         if: steps.queue.outputs.busy != 'true'
         env:
-          GH_TOKEN:  ${{ steps.app-token.outputs.token }}
+          GH_TOKEN:  ${{ secrets.TEST_PAT }}
           INPUT_SHA: ${{ inputs.target_sha }}
           REANCHOR:  ${{ inputs.reanchor }}
         run: |
@@ -230,11 +216,17 @@ jobs:
         if: steps.pin.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.TEST_PAT }}
           branch: bump/${{ matrix.sub }}
           base: ${{ env.BASE_BRANCH }}
           title: ${{ steps.pin.outputs.title }}
-          commit-message: ${{ steps.pin.outputs.title }}
+          commit-message: |
+            ${{ steps.pin.outputs.title }}
+
+            ${{ steps.pin.outputs.old_short }} -> ${{ steps.pin.outputs.new_short }} (${{ steps.pin.outputs.count }} commit(s))
+            ${{ steps.pin.outputs.compare }}
+
+            ${{ steps.pin.outputs.manifest }}
           body: |
             Automated submodule bump for `${{ matrix.sub }}`.
 
