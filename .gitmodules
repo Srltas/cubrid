@@ -1,12 +1,12 @@
 [submodule "cubridmanager"]
 	path = cubridmanager
-	url = https://github.com/CUBRID/cubrid-manager-server
+	url = https://github.com/Srltas/cubrid-manager-server
 	branch = develop
 [submodule "cubrid-jdbc"]
 	path = cubrid-jdbc
-	url = https://github.com/cubrid/cubrid-jdbc
+	url = https://github.com/Srltas/cubrid-jdbc
 	branch = develop
 [submodule "cubrid-cci"]
 	path = cubrid-cci
-	url = https://github.com/CUBRID/cubrid-cci.git
+	url = https://github.com/Srltas/cubrid-cci.git
 	branch = develop
