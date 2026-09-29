@@ -24,14 +24,17 @@ run_ctp() {  # run_ctp <name> <driver jar> <TC commit>
   cp -a "$WORK/testtools/CTP" "$CTP"
   sed -i "s|^scenario=.*|scenario=$SCENARIO|" "$CTP/conf/jdbc.conf"
   cp "$2" "$CUBRID/jdbc/cubrid_jdbc.jar"
+  # The 11.2 install rewrites databases.txt but leaves the volumes of the last run, and CTP then
+  # fails to create jdbcdb; both runs start without one.
+  sed -i '/^jdbcdb[[:space:]]/d' "$CUBRID_DATABASES/databases.txt" 2> /dev/null
+  rm -rf "$CUBRID_DATABASES"/jdbcdb*
   chown -R cubrid:cubrid "$CUBRID" "$SCENARIO" "$CTP"
   log "CTP $1: $(basename "$2") with the TCs of ${3:0:10}"
   "${AS_CUBRID[@]}" bash -c "cd $CTP && timeout 3600 ctp.sh jdbc -c $CTP/conf/jdbc.conf" > "$OUT/ctp-$1.log" 2>&1 < /dev/null
   log "CTP $1 exited $?"
   cp "$CTP/result/jdbc/current_runtime_logs/test-jdbc.xml" "$OUT/ctp-$1.xml" 2> /dev/null
   cp "$CTP/result/jdbc/current_runtime_logs/test_status.data" "$OUT/ctp-$1-status.data" 2> /dev/null
-  cubrid_stop "${AS_CUBRID[@]}" cubrid service stop
-  kill_cubrid
+  cubrid_stop "${AS_CUBRID[@]}" cubrid service stop || kill_cubrid
 }
 
 record "CTP: $(basename "$BROKEN_TC") left out of both runs" "-" "does not compile against the APIS-1113 cancelBroker" true

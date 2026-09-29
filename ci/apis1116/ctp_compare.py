@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """ctp_compare.py <before.xml> <after.xml> <diff.txt>
 
-Compares two CTP JDBC runs by failing case (<test file>::<method>, the id CTP reports) and prints
-one check per line as check|expected|actual|true-or-false. The full lists go to diff.txt.
+Compares two CTP JDBC runs by failing case (<test file>::<method>) and prints one check per line
+as check|expected|actual|true-or-false. The full lists go to diff.txt.
+
+The committed CTP jar collects the lambda$ methods javac generates for assertThrows as cases and
+fails every one of them ("No tests found matching Method lambda$..."); they are not tests, so they
+are counted apart and left out of the comparison.
 """
 import os
 import sys
@@ -12,22 +16,25 @@ MIN_CASES = 2000
 
 
 def load(path):
-    cases, failed = set(), set()
+    cases, failed, synthetic = set(), set(), 0
     if not os.path.exists(path):
-        return cases, failed
+        return cases, failed, synthetic
     for tc in ET.parse(path).getroot().iter("testcase"):
-        f = tc.get("file")
-        base = os.path.basename(f) if f else (tc.get("classname") or "?").rsplit("/", 1)[-1]
-        case = "%s::%s" % (base, tc.get("name"))
+        # CTP writes "<path of the test file> => <method>()" into file, classname and name alike
+        source, _, method = (tc.get("file") or tc.get("name") or "?").partition(" => ")
+        if method.startswith("lambda$"):
+            synthetic += 1
+            continue
+        case = "%s::%s" % (source.split("/src/", 1)[-1], method)
         cases.add(case)
         if tc.find("failure") is not None or tc.find("error") is not None:
             failed.add(case)
-    return cases, failed
+    return cases, failed, synthetic
 
 
 before_xml, after_xml, diff_txt = sys.argv[1:4]
-before_cases, before_failed = load(before_xml)
-after_cases, after_failed = load(after_xml)
+before_cases, before_failed, before_synthetic = load(before_xml)
+after_cases, after_failed, after_synthetic = load(after_xml)
 new = sorted(after_failed - before_failed)
 gone = sorted(before_failed - after_failed)
 
@@ -44,6 +51,7 @@ rows = [
     ("CTP: failures new with the patch", "0", "%d%s" % (len(new), ": " + ", ".join(new[:5]) if new else ""), not new),
     ("CTP: failed cases before / after", "-", "%d / %d" % (len(before_failed), len(after_failed)), True),
     ("CTP: failures gone with the patch", "-", "%d%s" % (len(gone), ": " + ", ".join(gone[:5]) if gone else ""), True),
+    ("CTP: lambda$ entries left out before / after", "-", "%d / %d" % (before_synthetic, after_synthetic), True),
 ]
 for check, expected, actual, ok in rows:
     print("%s|%s|%s|%s" % (check, expected, actual, "true" if ok else "false"))

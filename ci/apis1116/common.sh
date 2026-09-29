@@ -51,7 +51,7 @@ finish() {
 
 # The database once, and room for the leak checks: by default a CAS restarts long before 1,000 calls.
 server_setup() {
-  if ! grep -qs "^$DB " "$CUBRID_DATABASES/databases.txt"; then
+  if ! grep -qs "^${DB}[[:space:]]" "$CUBRID_DATABASES/databases.txt"; then
     rm -rf "${CUBRID_DATABASES:?}/$DB" && mkdir -p "$CUBRID_DATABASES/$DB"
     (cd "$CUBRID_DATABASES/$DB" && cubrid createdb --db-volume-size=64M --log-volume-size=64M "$DB" en_US.utf8) \
       > "$OUT/createdb.log" 2>&1 || return 1
@@ -69,11 +69,13 @@ cubrid_processes() {
   done
 }
 
-# Stops are bounded; whatever is left afterwards is killed, so a rebuild can replace the binaries.
-cubrid_stop() {  # cubrid_stop <cubrid command...>
-  timeout 180 "$@" > /dev/null 2>&1 < /dev/null && return 0
+# A stop that hangs is cut off after 180 s and reported; any other failure (nothing to stop) is fine.
+cubrid_stop() {  # cubrid_stop <command...>
+  timeout 180 "$@" > /dev/null 2>&1 < /dev/null
+  [ $? -ne 124 ] && return 0
   log "'${*}' did not finish in 180 s"
   cubrid_processes > "$OUT/processes-$(date +%H%M%S).txt"
+  return 1
 }
 
 kill_cubrid() {
@@ -84,10 +86,12 @@ kill_cubrid() {
   return 0
 }
 
+# Only after a stop hung: killing a healthy cub_master leaves it unable to start again.
 server_stop() {
-  cubrid_stop cubrid broker stop
-  cubrid_stop cubrid server stop "$DB"
-  kill_cubrid
+  local hung=false
+  cubrid_stop cubrid broker stop || hung=true
+  cubrid_stop cubrid server stop "$DB" || hung=true
+  [ "$hung" = false ] || kill_cubrid
 }
 
 # Output goes to a file: cub_pl keeps a pipe open and the start never returns.
