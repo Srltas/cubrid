@@ -1,0 +1,4 @@
+#!/bin/bash
+# Only a bare `make` in a recipe finds this one; it runs without the parent's job server flags.
+unset MAKEFLAGS MFLAGS
+exec /usr/bin/gmake "$@"

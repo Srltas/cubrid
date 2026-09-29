@@ -1,0 +1,141 @@
+# APIS-1116 (CAS schema-info sub-type 21) on four engine branches at once.
+# A push to this branch starts a run; "Re-run all jobs" takes the latest commit of each branch again.
+name: APIS-1116 verify
+
+on:
+  push:
+    branches: [verify/apis1116]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apis1116-verify
+  cancel-in-progress: true
+
+env:
+  DRIVER_BRANCH: APIS-1116_cas
+  DRIVER_BASE: 9bd89eb7f8d3c7ef5965373fff254061fcd30738
+  TC_BRANCH: APIS-1116_cas
+  TC_BASE: ddb17c1e634fa85a26e3b53a1decfc91b72dce07
+
+jobs:
+  run:
+    name: ${{ matrix.kind }} ${{ matrix.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    container:
+      image: cubridci/cubridci:build_rl8.10
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [develop, "11.4", "11.3", "11.2"]
+        kind: [verify, ctp]
+        include:
+          - version: develop
+            branch: APIS-1116_cas
+            base: fa1187540a9b7a9a5aa955e6b61d5b0e7c05fcb4
+          - version: "11.4"
+            branch: APIS-1116_cas_11.4
+            base: fa9377caa8b474f32e0b1473b3d078546161f2ab
+          - version: "11.3"
+            branch: APIS-1116_cas_11.3
+            base: 68bbe816015ddb412b8abc485d82f1aba43829ed
+          - version: "11.2"
+            branch: APIS-1116_cas_11.2
+            base: baf1d297defaf78f4a990da671b3f81553478ca1
+    env:
+      VERSION: ${{ matrix.version }}
+      KIND: ${{ matrix.kind }}
+      ENGINE_BRANCH: ${{ matrix.branch }}
+      ENGINE_BASE: ${{ matrix.base }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout these scripts
+        uses: actions/checkout@v4
+        with:
+          path: ci-src
+
+      - name: Checkout the engine
+        uses: actions/checkout@v4
+        with:
+          repository: Srltas/cubrid
+          ref: ${{ matrix.branch }}
+          path: cubrid
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Checkout the driver
+        uses: actions/checkout@v4
+        with:
+          repository: Srltas/cubrid-jdbc
+          ref: ${{ env.DRIVER_BRANCH }}
+          path: jdbc
+          fetch-depth: 0
+
+      - name: Checkout the test cases
+        uses: actions/checkout@v4
+        with:
+          repository: Srltas/cubrid-testcases-private
+          ref: ${{ env.TC_BRANCH }}
+          path: tc
+          fetch-depth: 0
+          token: ${{ secrets.TC_REPO_TOKEN }}
+
+      - name: Checkout CTP
+        if: matrix.kind == 'ctp'
+        uses: actions/checkout@v4
+        with:
+          repository: CUBRID/cubrid-testtools
+          ref: 88497b55e3a87d135a9dc8279cb54de9818e818b
+          path: testtools
+
+      - name: Restore the compiler cache
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.version }}-${{ matrix.base }}
+
+      - name: Build the drivers and the probe, check out the unpatched engine
+        run: ci-src/ci/apis1116/prepare.sh
+
+      - name: Build the unpatched engine
+        run: ci-src/ci/apis1116/build-engine.sh base
+
+      - name: Save the compiler cache
+        if: matrix.kind == 'verify' && steps.ccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.version }}-${{ matrix.base }}
+
+      - name: Run the ${{ matrix.kind }} checks
+        run: ci-src/ci/apis1116/${{ matrix.kind }}.sh
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ matrix.kind }}-${{ matrix.version }}
+          path: out
+          retention-days: 14
+
+  summary:
+    needs: run
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ci-src
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          path: results
+
+      - name: Write the summary
+        run: python3 ci-src/ci/apis1116/summarize.py results >> "$GITHUB_STEP_SUMMARY"
