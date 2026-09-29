@@ -72,6 +72,11 @@ server_restart() {
   { cubrid server start "$DB" && cubrid broker start; } > "$OUT/server-start.log" 2>&1 < /dev/null
 }
 
+# The manager server is left out, so its submodule is too.
+engine_checkout() {
+  git -C "$SRC" checkout -q --detach "$1" && git -C "$SRC" submodule update --init -q cubrid-cci cubrid-jdbc
+}
+
 probe() {
   timeout 900 java ${PROBE_JAVA_OPTS:-} -cp "$TOOLS/probe-driver.jar:$TOOLS/probe" SchemaListProbe "$PORT" "$DB" "$@"
 }

@@ -33,7 +33,7 @@ run_ctp() {  # run_ctp <name> <driver jar> <TC commit>
 
 run_ctp before "$TOOLS/old-driver.jar" "$TC_BASE"
 
-git -C "$SRC" checkout -q --detach "$patched" && git -C "$SRC" submodule update --init --recursive -q
+engine_checkout "$patched"
 "$CI_DIR/build-engine.sh" patched || { record "patched build" built failed false; finish; }
 
 run_ctp after "$TOOLS/new-driver.jar" "$tc_new"

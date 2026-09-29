@@ -71,6 +71,5 @@ jdbc.dbname=$DB
 EOF
 fi
 
-git -C "$SRC" checkout -q --detach "$ENGINE_BASE"
-git -C "$SRC" submodule update --init --recursive -q
+engine_checkout "$ENGINE_BASE"
 log "engine at the unpatched $(git -C "$SRC" rev-parse --short HEAD), patch $(git -C "$SRC" rev-parse --short "$patched")"

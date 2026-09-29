@@ -38,7 +38,7 @@ out=$(schema_tcs 2>&1); echo "$out" > "$OUT/tcs-unpatched.txt"
 record "schema TCs, new driver on the unpatched engine" "all pass" "$(tail -1 <<< "$out")" "$(tcs_ok "$out")"
 
 log "== the patch"
-git -C "$SRC" checkout -q --detach "$patched" && git -C "$SRC" submodule update --init --recursive -q
+engine_checkout "$patched"
 "$CI_DIR/build-engine.sh" patched || { record "patched build" built failed false; finish; }
 clean=$(git -C "$SRC" diff --quiet HEAD -- src/broker && echo clean || echo modified)
 record "patched build is the branch commit" "$(git -C "$SRC" rev-parse --short "$patched"), src/broker clean" \
