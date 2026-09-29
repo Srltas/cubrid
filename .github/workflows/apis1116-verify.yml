@@ -26,6 +26,8 @@ jobs:
     timeout-minutes: 180
     container:
       image: cubridci/cubridci:build_rl8.10
+      # PID 1 reaps the CUBRID processes that exit, instead of the runner's `tail -f /dev/null`
+      options: --init
     strategy:
       fail-fast: false
       matrix:

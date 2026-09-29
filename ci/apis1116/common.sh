@@ -60,16 +60,41 @@ server_setup() {
   grep -q '^APPL_SERVER_MAX_SIZE *=900M' "$conf" || sed -i '/^\[%BROKER1\]/a APPL_SERVER_MAX_SIZE    =900M' "$conf"
 }
 
-server_stop() {
-  cubrid broker stop > /dev/null 2>&1
-  cubrid server stop "$DB" > /dev/null 2>&1
+# pid, state and command line of every CUBRID process, for a stop or start that hangs
+cubrid_processes() {
+  local p cmd
+  for p in /proc/[0-9]*; do
+    cmd=$(tr '\0' ' ' < "$p/cmdline" 2> /dev/null) || continue
+    case $cmd in *cub_* | *cubrid* | *java*) echo "${p#/proc/} $(awk '{print $3}' "$p/stat" 2> /dev/null) $cmd" ;; esac
+  done
+}
+
+# Stops are bounded; whatever is left afterwards is killed, so a rebuild can replace the binaries.
+cubrid_stop() {  # cubrid_stop <cubrid command...>
+  timeout 180 "$@" > /dev/null 2>&1 < /dev/null && return 0
+  log "'${*}' did not finish in 180 s"
+  cubrid_processes > "$OUT/processes-$(date +%H%M%S).txt"
+}
+
+kill_cubrid() {
+  local p
+  for p in /proc/[0-9]*; do
+    case $(cat "$p/comm" 2> /dev/null) in cub_*) kill -9 "${p#/proc/}" 2> /dev/null ;; esac
+  done
   return 0
+}
+
+server_stop() {
+  cubrid_stop cubrid broker stop
+  cubrid_stop cubrid server stop "$DB"
+  kill_cubrid
 }
 
 # Output goes to a file: cub_pl keeps a pipe open and the start never returns.
 server_restart() {
   server_stop
-  { cubrid server start "$DB" && cubrid broker start; } > "$OUT/server-start.log" 2>&1 < /dev/null
+  { timeout 300 cubrid server start "$DB" && timeout 120 cubrid broker start; } > "$OUT/server-start.log" 2>&1 < /dev/null ||
+    { cubrid_processes >> "$OUT/server-start.log"; return 1; }
 }
 
 # The manager server is left out, so its submodule is too.
@@ -89,6 +114,6 @@ schema_tcs() {
 rebuild_cas() {
   cmake --build "$BUILD" --target cub_cas --parallel "$(nproc)" > "$OUT/cub_cas-build.log" 2>&1 ||
     { tail -40 "$OUT/cub_cas-build.log"; return 1; }
-  cubrid broker stop > /dev/null 2>&1
-  cp "$BUILD/bin/cub_cas" "$CUBRID/bin/cub_cas" && cubrid broker start > /dev/null 2>&1 < /dev/null
+  cubrid_stop cubrid broker stop
+  cp "$BUILD/bin/cub_cas" "$CUBRID/bin/cub_cas" && timeout 120 cubrid broker start > /dev/null 2>&1 < /dev/null
 }

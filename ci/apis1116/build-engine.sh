@@ -19,11 +19,14 @@ case $VERSION in
     ;;
 esac
 
+log "$phase build: stopping CUBRID"
 server_stop
+log "$phase build: building"
 if [ "$phase" = base ]; then
   ./build.sh "${options[@]}" -c "$cmake_options" -m debug -b "$BUILD" -p "$CUBRID" build > "$build_log" 2>&1
 else
-  { cmake --build "$BUILD" && cmake --build "$BUILD" --target install; } > "$build_log" 2>&1
+  cmake --build "$BUILD" > "$build_log" 2>&1 &&
+    { log "$phase build: installing"; cmake --build "$BUILD" --target install >> "$build_log" 2>&1; }
 fi
 rc=$?
 
