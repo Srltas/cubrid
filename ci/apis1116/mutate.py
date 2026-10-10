@@ -44,11 +44,10 @@ MUTANTS = {
     "like-to-equal": lambda: edit("cas_execute.c", "sch_schemas", [(
         r"""LIKE UPPER \('%s'\) ESCAPE '%s' ", (\w+),\s*get_backslash_escape_string \(\)\)""",
         lambda m: "= UPPER ('%s') \", " + m.group(1) + ")")]),
-    "db-user": lambda: edit("cas_execute.c", "sch_schemas", [
-        (r"SELECT schema_name FROM information_schema\.schemata", "SELECT name FROM db_user"),
-        (r"AND schema_name LIKE", "AND name LIKE"),
-        (r"AND schema_name = ", "AND name = "),
-        (r"ORDER BY schema_name", "ORDER BY name")]),
+    "db-user": lambda: edit("cas_execute.c", "sch_schemas", [(
+        r'"SELECT name FROM \(SELECT name FROM db_user UNION SELECT owner_name FROM db_auth "\s*'
+        r'"WHERE grantee_name IN \(SELECT name FROM db_user\)\) s WHERE 1 = 1 "',
+        '"SELECT name FROM db_user WHERE 1 = 1 "')]),
 }
 
 try:

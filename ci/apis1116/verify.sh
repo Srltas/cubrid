@@ -115,7 +115,7 @@ run_mutant commit-list "commit list without 21" "the commit check fails" commit_
 run_mutant close-list "close list without 21" "> 30720 KB over 500 calls" cas_leaks
 run_mutant no-upper "pattern without UPPER" "the lower-case TC fails" lower_case_tc_fails
 run_mutant like-to-equal "LIKE turned into =" "the pattern TCs fail" pattern_tcs_fail
-[ "$VERSION" = develop ] && run_mutant db-user "db_user instead of schemata" "the granted-table TC fails" granted_table_tc_fails
+[ "$VERSION" = develop ] && run_mutant db-user "db_user without the owners from db_auth" "the granted-table TC fails" granted_table_tc_fails
 
 git -C "$SRC" checkout -q -- src/broker && rebuild_cas
 out=$(probe 2>&1)
