@@ -36,7 +36,7 @@ jobs:
         include:
           - version: develop
             branch: APIS-1116_cas
-            base: 8f57aa0d77aaa85035ae8eefb25b3cec15b3668a
+            base: 71d3a3a352cbb64285f8a9bfbbe817141ea3fb3e
     env:
       VERSION: ${{ matrix.version }}
       KIND: ${{ matrix.kind }}
