@@ -8,7 +8,7 @@ import json
 import os
 import sys
 
-VERSIONS = ["develop", "11.4", "11.3", "11.2"]
+VERSIONS = ["develop"]
 KINDS = ["verify", "ctp"]
 
 

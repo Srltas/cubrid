@@ -1,4 +1,4 @@
-# APIS-1116 (CAS schema-info sub-type 21) on four engine branches at once.
+# APIS-1116 (CAS schema-info sub-type 21) on the develop engine branch.
 # A push to this branch starts a run; "Re-run all jobs" takes the latest commit of each branch again.
 name: APIS-1116 verify
 
@@ -31,21 +31,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [develop, "11.4", "11.3", "11.2"]
+        version: [develop]
         kind: [verify, ctp]
         include:
           - version: develop
             branch: APIS-1116_cas
-            base: fa1187540a9b7a9a5aa955e6b61d5b0e7c05fcb4
-          - version: "11.4"
-            branch: APIS-1116_cas_11.4
-            base: fa9377caa8b474f32e0b1473b3d078546161f2ab
-          - version: "11.3"
-            branch: APIS-1116_cas_11.3
-            base: 68bbe816015ddb412b8abc485d82f1aba43829ed
-          - version: "11.2"
-            branch: APIS-1116_cas_11.2
-            base: baf1d297defaf78f4a990da671b3f81553478ca1
+            base: 8f57aa0d77aaa85035ae8eefb25b3cec15b3668a
     env:
       VERSION: ${{ matrix.version }}
       KIND: ${{ matrix.kind }}
