@@ -35,7 +35,7 @@ jobs:
         kind: [verify, ctp]
         include:
           - version: develop
-            branch: APIS-1116_cas
+            branch: CBRD-27513
             base: 71d3a3a352cbb64285f8a9bfbbe817141ea3fb3e
     env:
       VERSION: ${{ matrix.version }}
