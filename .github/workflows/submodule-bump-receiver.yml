@@ -43,7 +43,7 @@ jobs:
       - name: Select submodules to process
         id: select
         env:
-          GH_TOKEN:      ${{ secrets.TEST_PAT }}
+          GH_TOKEN:      ${{ github.token }}
           EVENT:         ${{ github.event_name }}
           DISPATCH_PATH: ${{ github.event.client_payload.submodule_path }}
           INPUT_PATH:    ${{ inputs.submodule_path }}
@@ -99,12 +99,12 @@ jobs:
         with:
           ref: ${{ env.BASE_BRANCH }}
           fetch-depth: 0
-          token: ${{ secrets.TEST_PAT }}
+          token: ${{ github.token }}
 
       - name: Check queue
         id: queue
         env:
-          GH_TOKEN: ${{ secrets.TEST_PAT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           OPEN=$(gh pr list --repo "$PARENT" --state open --limit 100 --json number,headRefName \
@@ -137,7 +137,7 @@ jobs:
         id: pin
         if: steps.queue.outputs.busy != 'true'
         env:
-          GH_TOKEN:  ${{ secrets.TEST_PAT }}
+          GH_TOKEN:  ${{ github.token }}
           INPUT_SHA: ${{ inputs.target_sha }}
           REANCHOR:  ${{ inputs.reanchor }}
         run: |
@@ -232,7 +232,7 @@ jobs:
         if: steps.pin.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
-          token: ${{ secrets.TEST_PAT }}
+          token: ${{ github.token }}
           branch: bump/${{ matrix.sub }}
           base: ${{ env.BASE_BRANCH }}
           title: ${{ steps.pin.outputs.title }}
