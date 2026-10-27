@@ -1,4 +1,4 @@
-# APIS-1116 (CAS schema-info sub-type 21) on the develop engine branch.
+# APIS-1116: the JDBC suite before and after the change, on the develop engine that merged it.
 # A push to this branch starts a run; "Re-run all jobs" takes the latest commit of each branch again.
 name: APIS-1116 verify
 
@@ -14,10 +14,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DRIVER_BRANCH: APIS-1116_cas
-  DRIVER_BASE: 57d2c75d73ee820c26ac049b7ba758f5e646519a
-  TC_BRANCH: APIS-1116_cas
-  TC_BASE: ddb17c1e634fa85a26e3b53a1decfc91b72dce07
+  DRIVER_BRANCH: APIS-1116
+  DRIVER_BASE: 47eec8039264ad8b686f04e4d48d4a06f2c2bbf9
+  TC_BRANCH: APIS-1116
+  TC_BASE: 433fc3d9065648c5f6f396170aa8db542abe84ed
 
 jobs:
   run:
@@ -32,11 +32,11 @@ jobs:
       fail-fast: false
       matrix:
         version: [develop]
-        kind: [verify, ctp]
+        kind: [ctp]
         include:
           - version: develop
-            branch: CBRD-27513
-            base: 71d3a3a352cbb64285f8a9bfbbe817141ea3fb3e
+            branch: 4b32f6629703cdfaf5d94cb0a32bf7a9fb871b7e
+            base: a96dbce2d12938acabc15a00b546ea218db73b12
     env:
       VERSION: ${{ matrix.version }}
       KIND: ${{ matrix.kind }}
@@ -54,7 +54,7 @@ jobs:
       - name: Checkout the engine
         uses: actions/checkout@v4
         with:
-          repository: Srltas/cubrid
+          repository: CUBRID/cubrid
           ref: ${{ matrix.branch }}
           path: cubrid
           fetch-depth: 0
