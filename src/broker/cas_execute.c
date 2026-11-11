@@ -74,6 +74,7 @@
 #include "dbtype.h"
 #include "memory_alloc.h"
 #include "object_primitive.h"
+#include "string_opfunc.h"
 #include "db_session.h"
 #include "method_callback.hpp"
 #include "cas_optimization.h"
@@ -87,6 +88,7 @@
 #endif /* defined (SUPPRESS_STRLEN_WARNING) */
 
 #define QUERY_BUFFER_MAX                4096
+#define SCH_BIND_VALUE_MAX              3
 
 #define FK_INFO_SORT_BY_PKTABLE_NAME	1
 #define FK_INFO_SORT_BY_FKTABLE_NAME	2
@@ -272,7 +274,10 @@ static int class_type (DB_OBJECT * class_obj);
 static int class_attr_info (const char *class_name, DB_ATTRIBUTE * attr, char *attr_pattern, char pat_flag,
 			    T_ATTR_TABLE * attr_table);
 static int set_priv_table (unsigned int class_priv, char *name, T_PRIV_TABLE * priv_table, int index);
-static int sch_query_execute (T_SRV_HANDLE * srv_handle, char *sql_stmt, T_NET_BUF * net_buf);
+static int sch_query_execute (T_SRV_HANDLE * srv_handle, char *sql_stmt, DB_VALUE * bind_values, int num_bind,
+			      T_NET_BUF * net_buf);
+static int sch_make_upper_string (DB_VALUE * upper, const char *str);
+static void sch_clear_bind_values (DB_VALUE * bind_values, int num_bind);
 static int sch_primary_key (T_NET_BUF * net_buf, char *class_name, T_SRV_HANDLE * srv_handle);
 static int sch_schemas (T_NET_BUF * net_buf, char *schema_name, char pattern_flag, T_SRV_HANDLE * srv_handle);
 static int sch_current_schema (T_NET_BUF * net_buf, T_SRV_HANDLE * srv_handle);
@@ -7588,6 +7593,9 @@ sch_class_info (T_NET_BUF * net_buf, char *class_name, char pattern_flag, char v
   int num_result;
   char schema_name[DB_MAX_SCHEMA_LENGTH] = { '\0' };
   char *class_name_only = NULL;
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
+  int err_code;
 
   ut_tolower (class_name);
 
@@ -7639,8 +7647,8 @@ sch_class_info (T_NET_BUF * net_buf, char *class_name, char pattern_flag, char v
     {
       if (class_name_only)
 	{
-	  STRING_APPEND (sql_p, avail_size, "AND class_name LIKE '%s' ESCAPE '%s' ", class_name_only,
-			 get_backslash_escape_string ());
+	  STRING_APPEND (sql_p, avail_size, "AND class_name LIKE ? ESCAPE '%s' ", get_backslash_escape_string ());
+	  db_make_string (&bind_values[num_bind++], class_name_only);
 	}
     }
   else
@@ -7649,15 +7657,22 @@ sch_class_info (T_NET_BUF * net_buf, char *class_name, char pattern_flag, char v
 	{
 	  class_name_only = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (sql_p, avail_size, "AND class_name = '%s' ", class_name_only);
+      STRING_APPEND (sql_p, avail_size, "AND class_name = ? ");
+      db_make_string (&bind_values[num_bind++], class_name_only);
     }
 
   if (*schema_name)
     {
-      STRING_APPEND (sql_p, avail_size, "AND owner_name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND owner_name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
   if (num_result < 0)
     {
       return num_result;
@@ -7678,6 +7693,9 @@ sch_attr_info (T_NET_BUF * net_buf, char *class_name, char *attr_name, char patt
   int num_result;
   char schema_name[DB_MAX_SCHEMA_LENGTH] = { '\0' };
   char *class_name_only = NULL;
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
+  int err_code;
 
   ut_tolower (class_name);
   ut_tolower (attr_name);
@@ -7729,8 +7747,8 @@ sch_attr_info (T_NET_BUF * net_buf, char *class_name, char *attr_name, char patt
     {
       if (class_name_only)
 	{
-	  STRING_APPEND (sql_p, avail_size, "AND a.class_name LIKE '%s' ESCAPE '%s' ", class_name_only,
-			 get_backslash_escape_string ());
+	  STRING_APPEND (sql_p, avail_size, "AND a.class_name LIKE ? ESCAPE '%s' ", get_backslash_escape_string ());
+	  db_make_string (&bind_values[num_bind++], class_name_only);
 	}
     }
   else
@@ -7739,15 +7757,16 @@ sch_attr_info (T_NET_BUF * net_buf, char *class_name, char *attr_name, char patt
 	{
 	  class_name_only = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (sql_p, avail_size, "AND a.class_name = '%s' ", class_name_only);
+      STRING_APPEND (sql_p, avail_size, "AND a.class_name = ? ");
+      db_make_string (&bind_values[num_bind++], class_name_only);
     }
 
   if (pattern_flag & CCI_ATTR_NAME_PATTERN_MATCH)
     {
       if (attr_name)
 	{
-	  STRING_APPEND (sql_p, avail_size, "AND a.attr_name LIKE '%s' ESCAPE '%s' ", attr_name,
-			 get_backslash_escape_string ());
+	  STRING_APPEND (sql_p, avail_size, "AND a.attr_name LIKE ? ESCAPE '%s' ", get_backslash_escape_string ());
+	  db_make_string (&bind_values[num_bind++], attr_name);
 	}
     }
   else
@@ -7756,17 +7775,24 @@ sch_attr_info (T_NET_BUF * net_buf, char *class_name, char *attr_name, char patt
 	{
 	  attr_name = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (sql_p, avail_size, "AND a.attr_name = '%s' ", attr_name);
+      STRING_APPEND (sql_p, avail_size, "AND a.attr_name = ? ");
+      db_make_string (&bind_values[num_bind++], attr_name);
     }
 
   if (*schema_name)
     {
-      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
   STRING_APPEND (sql_p, avail_size, "ORDER BY a.class_name, a.def_order ");
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
   if (num_result < 0)
     {
       return num_result;
@@ -7797,6 +7823,8 @@ sch_attr_with_synonym_info (T_NET_BUF * net_buf, char *class_name, char *attr_na
   int stmt_id = 0;
   int err_code = NO_ERROR;
   char target_class_name[DB_MAX_CLASS_LENGTH] = { '\0' };
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
 
   ut_tolower (class_name);
   ut_tolower (attr_name);
@@ -7846,11 +7874,17 @@ sch_attr_with_synonym_info (T_NET_BUF * net_buf, char *class_name, char *attr_na
 	{
 	  class_name_only = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (synonym_sql_stmt_p, synonym_avail_size, "AND synonym_name = '%s' ", class_name_only);
+      STRING_APPEND (synonym_sql_stmt_p, synonym_avail_size, "AND synonym_name = ? ");
+      db_make_string (&bind_values[num_bind++], class_name_only);
 
       if (*schema_name)
 	{
-	  STRING_APPEND (synonym_sql_stmt_p, synonym_avail_size, "AND synonym_owner_name = UPPER ('%s') ", schema_name);
+	  STRING_APPEND (synonym_sql_stmt_p, synonym_avail_size, "AND synonym_owner_name = ? ");
+	  err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+	  if (err_code != NO_ERROR)
+	    {
+	      return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	    }
 	}
 
       db_make_null (&values[0]);
@@ -7864,6 +7898,12 @@ sch_attr_with_synonym_info (T_NET_BUF * net_buf, char *class_name, char *attr_na
 
       stmt_id = db_compile_statement (session);
       if (stmt_id < 0)
+	{
+	  goto sql_error;
+	}
+
+      err_code = set_host_variables (session, num_bind, bind_values);
+      if (err_code < 0)
 	{
 	  goto sql_error;
 	}
@@ -7927,6 +7967,9 @@ sch_attr_with_synonym_info (T_NET_BUF * net_buf, char *class_name, char *attr_na
 	  db_close_session (session);
 	}
 
+      sch_clear_bind_values (bind_values, num_bind);
+      num_bind = 0;
+
       if (num_result < 0)
 	{
 	  return num_result;
@@ -7976,14 +8019,15 @@ sch_attr_with_synonym_info (T_NET_BUF * net_buf, char *class_name, char *attr_na
     {
       class_name_only = CONST_CAST (char *, "");
     }
-  STRING_APPEND (sql_p, avail_size, "AND a.class_name = '%s' ", class_name_only);
+  STRING_APPEND (sql_p, avail_size, "AND a.class_name = ? ");
+  db_make_string (&bind_values[num_bind++], class_name_only);
 
   if (pattern_flag & CCI_ATTR_NAME_PATTERN_MATCH)
     {
       if (attr_name)
 	{
-	  STRING_APPEND (sql_p, avail_size, "AND a.attr_name LIKE '%s' ESCAPE '%s' ", attr_name,
-			 get_backslash_escape_string ());
+	  STRING_APPEND (sql_p, avail_size, "AND a.attr_name LIKE ? ESCAPE '%s' ", get_backslash_escape_string ());
+	  db_make_string (&bind_values[num_bind++], attr_name);
 	}
     }
   else
@@ -7992,17 +8036,24 @@ sch_attr_with_synonym_info (T_NET_BUF * net_buf, char *class_name, char *attr_na
 	{
 	  attr_name = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (sql_p, avail_size, "AND a.attr_name = '%s' ", attr_name);
+      STRING_APPEND (sql_p, avail_size, "AND a.attr_name = ? ");
+      db_make_string (&bind_values[num_bind++], attr_name);
     }
 
   if (*schema_name)
     {
-      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
   STRING_APPEND (sql_p, avail_size, "ORDER BY a.class_name, a.def_order ");
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
   if (num_result < 0)
     {
       return num_result;
@@ -8028,6 +8079,7 @@ sql_error:
 
   db_value_clear (&values[0]);
   db_value_clear (&values[1]);
+  sch_clear_bind_values (bind_values, num_bind);
 
   return err_code;
 }
@@ -8040,6 +8092,9 @@ sch_queryspec (T_NET_BUF * net_buf, char *class_name, T_SRV_HANDLE * srv_handle)
   int num_result;
   char schema_name[DB_MAX_SCHEMA_LENGTH] = { '\0' };
   const char *class_name_only = NULL;
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
+  int err_code;
 
   ut_tolower (class_name);
 
@@ -8067,14 +8122,21 @@ sch_queryspec (T_NET_BUF * net_buf, char *class_name, T_SRV_HANDLE * srv_handle)
       class_name_only = CONST_CAST (char *, "");
     }
 
-  STRING_APPEND (sql_p, avail_size, "SELECT vclass_def FROM db_vclass WHERE vclass_name = '%s' ", class_name_only);
+  STRING_APPEND (sql_p, avail_size, "SELECT vclass_def FROM db_vclass WHERE vclass_name = ? ");
+  db_make_string (&bind_values[num_bind++], class_name_only);
 
   if (*schema_name)
     {
-      STRING_APPEND (sql_p, avail_size, "AND owner_name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND owner_name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
   if (num_result < 0)
     {
       return num_result;
@@ -8755,7 +8817,27 @@ set_priv_table (unsigned int class_priv, char *name, T_PRIV_TABLE * priv_table, 
 }
 
 static int
-sch_query_execute (T_SRV_HANDLE * srv_handle, char *sql_stmt, T_NET_BUF * net_buf)
+sch_make_upper_string (DB_VALUE * upper, const char *str)
+{
+  DB_VALUE value;
+
+  db_make_string (&value, str);
+  return db_string_upper (&value, upper);
+}
+
+static void
+sch_clear_bind_values (DB_VALUE * bind_values, int num_bind)
+{
+  int i;
+
+  for (i = 0; i < num_bind; i++)
+    {
+      db_value_clear (&bind_values[i]);
+    }
+}
+
+static int
+sch_query_execute (T_SRV_HANDLE * srv_handle, char *sql_stmt, DB_VALUE * bind_values, int num_bind, T_NET_BUF * net_buf)
 {
   DB_SESSION *session = NULL;
   int stmt_id, num_result, stmt_type;
@@ -8778,6 +8860,17 @@ sch_query_execute (T_SRV_HANDLE * srv_handle, char *sql_stmt, T_NET_BUF * net_bu
       err_code = ERROR_INFO_SET (stmt_id, DBMS_ERROR_INDICATOR);
       db_close_session (session);
       return err_code;
+    }
+
+  if (num_bind > 0)
+    {
+      err_code = set_host_variables (session, num_bind, bind_values);
+      if (err_code < 0)
+	{
+	  lang_set_parser_use_client_charset (true);
+	  db_close_session (session);
+	  return err_code;
+	}
     }
 
   stmt_type = db_get_statement_type (session, stmt_id);
@@ -8835,6 +8928,9 @@ sch_direct_super_class (T_NET_BUF * net_buf, char *class_name, int pattern_flag,
   int avail_size = sizeof (sql_stmt) - 1;
   char schema_name[DB_MAX_SCHEMA_LENGTH] = { '\0' };
   char *class_name_only = NULL;
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
+  int err_code;
 
   ut_tolower (class_name);
 
@@ -8880,8 +8976,8 @@ sch_direct_super_class (T_NET_BUF * net_buf, char *class_name, int pattern_flag,
     {
       if (class_name_only)
 	{
-	  STRING_APPEND (sql_p, avail_size, "AND a.class_name LIKE '%s' ESCAPE '%s' ", class_name_only,
-			 get_backslash_escape_string ());
+	  STRING_APPEND (sql_p, avail_size, "AND a.class_name LIKE ? ESCAPE '%s' ", get_backslash_escape_string ());
+	  db_make_string (&bind_values[num_bind++], class_name_only);
 	}
     }
   else
@@ -8890,15 +8986,22 @@ sch_direct_super_class (T_NET_BUF * net_buf, char *class_name, int pattern_flag,
 	{
 	  class_name_only = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (sql_p, avail_size, "AND a.class_name = '%s' ", class_name_only);
+      STRING_APPEND (sql_p, avail_size, "AND a.class_name = ? ");
+      db_make_string (&bind_values[num_bind++], class_name_only);
     }
 
   if (*schema_name)
     {
-      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
   if (num_result < 0)
     {
       return num_result;
@@ -8919,6 +9022,9 @@ sch_primary_key (T_NET_BUF * net_buf, char *class_name, T_SRV_HANDLE * srv_handl
   DB_OBJECT *class_object;
   char schema_name[DB_MAX_SCHEMA_LENGTH] = { '\0' };
   char *class_name_only = NULL;
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
+  int err_code;
 
   ut_tolower (class_name);
 
@@ -8970,18 +9076,25 @@ sch_primary_key (T_NET_BUF * net_buf, char *class_name, T_SRV_HANDLE * srv_handl
 	  "AND a.class_name = b.class_name "
 	  "AND a.owner_name = b.owner_name "
 	  "AND a.is_primary_key = 'YES' "
-	  "AND a.class_name = '%s' ",
-	class_name_only);
+	  "AND a.class_name = ? ");
   // *INDENT-ON*
+  db_make_string (&bind_values[num_bind++], class_name_only);
 
   if (*schema_name)
     {
-      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND a.owner_name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
   STRING_APPEND (sql_p, avail_size, "ORDER BY b.key_attr_name ");
 
-  if ((num_result = sch_query_execute (srv_handle, sql_stmt, net_buf)) < 0)
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
+  if (num_result < 0)
     {
       return num_result;
     }
@@ -8998,6 +9111,9 @@ sch_schemas (T_NET_BUF * net_buf, char *schema_name, char pattern_flag, T_SRV_HA
   char sql_stmt[QUERY_BUFFER_MAX], *sql_p = sql_stmt;
   int avail_size = sizeof (sql_stmt) - 1;
   int num_result;
+  DB_VALUE bind_values[SCH_BIND_VALUE_MAX];
+  int num_bind = 0;
+  int err_code;
 
   /* db_user shows a user outside DBA only itself and its groups; db_auth adds the owners of what they were granted. */
   STRING_APPEND (sql_p, avail_size,
@@ -9008,8 +9124,12 @@ sch_schemas (T_NET_BUF * net_buf, char *schema_name, char pattern_flag, T_SRV_HA
     {
       if (schema_name)
 	{
-	  STRING_APPEND (sql_p, avail_size, "AND name LIKE UPPER ('%s') ESCAPE '%s' ", schema_name,
-			 get_backslash_escape_string ());
+	  STRING_APPEND (sql_p, avail_size, "AND name LIKE ? ESCAPE '%s' ", get_backslash_escape_string ());
+	  err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+	  if (err_code != NO_ERROR)
+	    {
+	      return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	    }
 	}
     }
   else
@@ -9018,12 +9138,18 @@ sch_schemas (T_NET_BUF * net_buf, char *schema_name, char pattern_flag, T_SRV_HA
 	{
 	  schema_name = CONST_CAST (char *, "");
 	}
-      STRING_APPEND (sql_p, avail_size, "AND name = UPPER ('%s') ", schema_name);
+      STRING_APPEND (sql_p, avail_size, "AND name = ? ");
+      err_code = sch_make_upper_string (&bind_values[num_bind++], schema_name);
+      if (err_code != NO_ERROR)
+	{
+	  return ERROR_INFO_SET (err_code, DBMS_ERROR_INDICATOR);
+	}
     }
 
   STRING_APPEND (sql_p, avail_size, "ORDER BY name");
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, bind_values, num_bind, net_buf);
+  sch_clear_bind_values (bind_values, num_bind);
   if (num_result < 0)
     {
       return num_result;
@@ -9041,7 +9167,7 @@ sch_current_schema (T_NET_BUF * net_buf, T_SRV_HANDLE * srv_handle)
   char sql_stmt[] = "SELECT CURRENT_USER";
   int num_result;
 
-  num_result = sch_query_execute (srv_handle, sql_stmt, net_buf);
+  num_result = sch_query_execute (srv_handle, sql_stmt, NULL, 0, net_buf);
   if (num_result < 0)
     {
       return num_result;
