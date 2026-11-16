@@ -22,7 +22,7 @@ SETLOCAL
 rem CUBRID build script for MS Windows.
 rem
 rem Requirements
-rem - cmake, ant, zip, md5sum, gnu flex, bison
+rem - cmake, zip, md5sum, gnu flex, bison
 rem - wix for msi installer
 rem - Windows 2003 or later
 

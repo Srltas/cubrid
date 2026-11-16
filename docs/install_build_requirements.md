@@ -36,7 +36,7 @@ source scl_source enable devtoolset-8 \
     && mv build-cmake/ninja /usr/bin/ninja \
     && cd ..
 
-yum install -y ant libtool libtool-ltdl autoconf automake rpm-build
+yum install -y libtool libtool-ltdl autoconf automake rpm-build
 
 
 # install FLEX and BISON
@@ -64,10 +64,7 @@ choco feature enable -n allowGlobalConfirmation;
 choco install git git-lfs git-credential-manager-for-windows --no-progress -y
 choco install jdk8 --force --no-progress -y \
 choco install cmake --version=3.26.3 --no-progress -y \
-choco install winflexbison wixtoolset --no-progress -y \
-choco install ant --ignore-dependencies --no-progress -y
-
-$env:ANT="C:\ProgramData\chocolatey\bin\ant.exe"
+choco install winflexbison wixtoolset --no-progress -y
 
 
 # Install VS 2017 community

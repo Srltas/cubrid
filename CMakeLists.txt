@@ -787,6 +787,11 @@ if(WITH_JDBC AND EXISTS ${CMAKE_SOURCE_DIR}/cubrid-jdbc/src)
     PATTERN "src" EXCLUDE
     PATTERN "output" EXCLUDE
     PATTERN "release" EXCLUDE
+    # Gradle's wrapper, outputs and caches, and lib/ where the Ant build put test jars
+    PATTERN "gradle" EXCLUDE
+    PATTERN "build" EXCLUDE
+    PATTERN ".gradle" EXCLUDE
+    PATTERN "lib" EXCLUDE
   )
 endif()
 

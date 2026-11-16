@@ -38,7 +38,7 @@ Apache 2.0 license. Version 11.5.x.
 │   └── win_tools/       # Windows service/tray tools
 ├── unit_tests/          # Catch2 v2.11.3 (see unit_tests/AGENTS.md)
 ├── pl_engine/           # Java PL server, Gradle (see pl_engine/AGENTS.md)
-├── cubrid-jdbc/         # JDBC driver (git submodule, Ant build)
+├── cubrid-jdbc/         # JDBC driver (git submodule, Gradle build)
 ├── cubrid-cci/          # CCI C driver (git submodule, CMake build)
 ├── cubridmanager/       # CUBRID Manager server (git submodule)
 ├── broker/              # Broker configs + top-level CMake target
